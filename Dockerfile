@@ -10,7 +10,9 @@ ENV PYTHONFAULTHANDLER=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONNOUSERSITE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PIP_DEFAULT_TIMEOUT=120 \
+    PIP_DEFAULT_TIMEOUT=30 \
+    PIP_RETRIES=2 \
+    PIP_PROGRESS_BAR=on \
     PIP_ROOT_USER_ACTION=ignore \
     HF_HOME=/app/.cache/huggingface \
     TORCH_HOME=/app/.cache/torch
@@ -40,16 +42,34 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         pip==25.3 \
         wheel==0.45.1 \
         setuptools==80.9.0 \
+        scikit-build-core==0.11.6 \
         cmake==3.31.6 \
         ninja==1.11.1.4
 
+# Download separately so a compilation retry can reuse the completed layer.
+# Use the installed build backend instead of creating another environment that
+# downloads its own CMake/Ninja versions.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip download -v \
+        --no-deps \
+        --no-build-isolation \
+        --no-binary=llama-cpp-python \
+        --dest /opt/llama-source \
+        llama-cpp-python==0.3.36
+
 # Compile explicitly: an ordinary wheel may contain only the CPU backend.
-# This layer is cached even when the application dependency list changes.
+# This pip invocation uses the local source archive, with package downloads
+# disabled. Runtime dependencies are installed from requirements.txt below.
 ARG CUDA_ARCHITECTURES=61
 ARG BUILD_JOBS=4
 RUN CMAKE_ARGS="-DGGML_CUDA=ON -DGGML_NATIVE=OFF -DCMAKE_CUDA_ARCHITECTURES=${CUDA_ARCHITECTURES}" \
     CMAKE_BUILD_PARALLEL_LEVEL="${BUILD_JOBS}" \
-    python -m pip install -v --no-cache-dir --no-binary=llama-cpp-python llama-cpp-python==0.3.36
+    python -m pip install -v \
+        --no-cache-dir \
+        --no-index \
+        --no-deps \
+        --no-build-isolation \
+        /opt/llama-source/llama_cpp_python-0.3.36.tar.gz
 
 COPY requirements.txt /opt/requirements/requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
