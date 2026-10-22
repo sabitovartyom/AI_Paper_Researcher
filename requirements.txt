@@ -71,6 +71,7 @@ multidict==7.1.0
 narwhals==2.27.1
 nest-asyncio2==1.7.4
 networkx==3.6.1
+ninja==1.11.1.4
 numpy==2.4.6
 nvidia-cublas-cu12==12.4.5.8
 nvidia-cuda-cupti-cu12==12.4.127

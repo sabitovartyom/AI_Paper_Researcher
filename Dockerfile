@@ -33,8 +33,8 @@ RUN python -m pip install --no-cache-dir --no-deps --only-binary=:all: \
     llama-cpp-python==0.3.16
 
 COPY requirements.txt /tmp/requirements.txt
-RUN python -m pip install --no-cache-dir -r /tmp/requirements.txt \
-    && python -m pip check
+RUN python -m pip install --no-cache-dir -r /tmp/requirements.txt
+RUN python -m pip check
 
 ARG APP_UID=1000
 ARG APP_GID=1000

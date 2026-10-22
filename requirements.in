@@ -1,6 +1,9 @@
 # Input for requirements.txt. Keep CUDA/PyTorch compatible with the GTX 1080 Ti.
 torch==2.5.1
 
+# Replace the base image's ninja 1.11.1.1, whose wheel metadata breaks pip check.
+ninja==1.11.1.4
+
 # GGUF inference (published CUDA wheel installed separately in Dockerfile).
 llama-cpp-python==0.3.16
 huggingface-hub>=0.30,<1
