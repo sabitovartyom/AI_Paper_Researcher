@@ -49,7 +49,7 @@ ARG CUDA_ARCHITECTURES=61
 ARG BUILD_JOBS=4
 RUN CMAKE_ARGS="-DGGML_CUDA=ON -DGGML_NATIVE=OFF -DCMAKE_CUDA_ARCHITECTURES=${CUDA_ARCHITECTURES}" \
     CMAKE_BUILD_PARALLEL_LEVEL="${BUILD_JOBS}" \
-    python -m pip install --no-cache-dir --no-binary=llama-cpp-python llama-cpp-python==0.3.36
+    python -m pip install -v --no-cache-dir --no-binary=llama-cpp-python llama-cpp-python==0.3.36
 
 COPY requirements.txt /opt/requirements/requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
