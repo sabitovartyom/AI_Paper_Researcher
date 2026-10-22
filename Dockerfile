@@ -46,16 +46,20 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         cmake==3.31.6 \
         ninja==1.11.1.4
 
-# Download separately so a compilation retry can reuse the completed layer.
-# Use the installed build backend instead of creating another environment that
-# downloads its own CMake/Ninja versions.
-RUN --mount=type=cache,target=/root/.cache/pip \
-    python -m pip download -v \
-        --no-deps \
-        --no-build-isolation \
-        --no-binary=llama-cpp-python \
-        --dest /opt/llama-source \
-        llama-cpp-python==0.3.36
+# Download separately with a byte/speed meter and bounded network waits.
+# Pin the immutable PyPI source URL and verify its published SHA-256.
+RUN mkdir -p /opt/llama-source \
+    && curl --fail --location --show-error --progress-meter --ipv4 \
+        --connect-timeout 15 \
+        --max-time 300 \
+        --speed-limit 1024 \
+        --speed-time 30 \
+        --output /opt/llama-source/llama_cpp_python-0.3.36.tar.gz \
+        https://files.pythonhosted.org/packages/ec/e9/e7de2b0463ea3ffbf0ede6cb21b58c1258a8f6521aae45ca773a59fe7cf3/llama_cpp_python-0.3.36.tar.gz \
+    && printf '%s  %s\n' \
+        832db0699007f1be95a7e41ef12e88926b02ba836461e36a36372db2760c1a2e \
+        /opt/llama-source/llama_cpp_python-0.3.36.tar.gz \
+        | sha256sum --check -
 
 # Compile explicitly: an ordinary wheel may contain only the CPU backend.
 # This pip invocation uses the local source archive, with package downloads
