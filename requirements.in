@@ -1,8 +1,8 @@
 # Input for requirements.txt. Keep CUDA/PyTorch compatible with the GTX 1080 Ti.
-torch==2.6.0
+torch==2.5.1
 
-# GGUF inference (compiled with CUDA separately in Dockerfile).
-llama-cpp-python==0.3.36
+# GGUF inference (published CUDA wheel installed separately in Dockerfile).
+llama-cpp-python==0.3.16
 huggingface-hub>=0.30,<1
 
 # HTTP API and configuration.

@@ -8,15 +8,11 @@ app_gid="${APP_GID:-$(id -g)}"
 
 command -v docker >/dev/null || { echo "Docker is not installed." >&2; exit 1; }
 
-# Explicit architecture works during docker build, where GPUs are not exposed.
-# Defaults match the server's GTX 1080 Ti cards (Pascal, sm_61).
 exec docker build \
     --progress "${BUILDKIT_PROGRESS:-plain}" \
     --file "${project_dir}/Dockerfile" \
     --tag "${image_name}" \
     --build-arg "APP_UID=${app_uid}" \
     --build-arg "APP_GID=${app_gid}" \
-    --build-arg "CUDA_ARCHITECTURES=${CUDA_ARCHITECTURES:-61}" \
-    --build-arg "BUILD_JOBS=${BUILD_JOBS:-4}" \
     "$@" \
     "${project_dir}"

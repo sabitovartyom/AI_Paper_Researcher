@@ -10,8 +10,11 @@
 Файл `credentials` не нужен: путь к проекту и UID/GID определяются скриптами.
 
 Сервер: четыре GTX 1080 Ti, по 11 GiB, драйвер NVIDIA 580.178.04.
-Используется образ `pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel` с Python 3.11.
-`llama-cpp-python` собирается с CUDA под `sm_61` — архитектуру GTX 1080 Ti.
+Используется тот же базовый образ, что в LimitedMemoryRule:
+`pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel` с Python 3.11.
+`llama-cpp-python==0.3.16` устанавливается готовым CUDA 12.4 wheel из официального
+индекса проекта. Входящая в него версия llama.cpp поддерживает Qwen3; CUDA-сборка
+включает Pascal. Размер Linux/Python 3.11 wheel — около 526 MiB.
 CUDA 13 в выводе `nvidia-smi` обозначает возможности драйвера; для этих Pascal
 GPU нужна сборка с CUDA 12.x. PyTorch также закреплён, чтобы обновление пакетов
 не заменило его сборкой без поддержки этих GPU.
@@ -19,11 +22,11 @@ GPU нужна сборка с CUDA 12.x. PyTorch также закреплён,
 Справочники: [архитектуры NVIDIA](https://developer.nvidia.com/cuda/gpus/legacy),
 [поддержка Pascal в CUDA](https://developer.nvidia.com/blog/navigating-gpu-architecture-support-a-guide-for-nvidia-cuda-developers),
 [версии PyTorch](https://pytorch.org/get-started/previous-versions/),
-[сборка llama-cpp-python с CUDA](https://llama-cpp-python.readthedocs.io/en/latest/#supported-backends).
+[готовые CUDA wheels](https://abetlen.github.io/llama-cpp-python/whl/cu124/llama-cpp-python/).
 
 ## Первый запуск на сервере
 
-Нужны Docker с BuildKit, NVIDIA-драйвер и NVIDIA Container Toolkit.
+Нужны Docker, NVIDIA-драйвер и NVIDIA Container Toolkit.
 Скопируй/клонируй весь проект на сервер. Название каталога на сервере произвольное;
 в контейнере он всегда доступен как `/app`, а контейнер называется
 `ai-paper-researcher`.
@@ -36,21 +39,14 @@ GPU нужна сборка с CUDA 12.x. PyTorch также закреплён,
 docker exec -it ai-paper-researcher bash
 ```
 
-Сборка скачивает большой CUDA/PyTorch-образ, устанавливает зависимости и компилирует
-GGUF runtime. Первая сборка занимает время; следующие используют кеш слоёв.
+Сборка использует готовый CUDA/PyTorch-образ и устанавливает Python-пакеты.
+Компиляции GGUF runtime из исходников нет. Первая сборка скачивает пакеты;
+следующие используют кеш слоёв.
 Веса моделей при сборке и запуске контейнера автоматически не скачиваются.
 
-`build_image` по умолчанию показывает полный лог (`--progress=plain`). Скачивание
-архива `llama-cpp-python` выделено в отдельный слой перед компиляцией. Архив
-скачивается напрямую с PyPI через `curl` с отображением байтов и скорости,
-проверяется его SHA-256. Для этой загрузки используются IPv4, таймаут соединения
-15 секунд, остановка при скорости ниже 1 KiB/s в течение 30 секунд и общий лимит
-300 секунд без автоматических повторов. CMake,
-Ninja и scikit-build-core установлены заранее; `--no-build-isolation` позволяет
-использовать именно их. При компиляции pip работает с локальным архивом, с
-отключённым скачиванием пакетов (`--no-index --no-deps`). Сетевой таймаут pip —
-30 секунд бездействия, число повторов — 2; это не ограничение общей длительности
-скачивания. Ошибка скачивания и долгая компиляция теперь видны отдельными шагами.
+`build_image` по умолчанию показывает полный лог (`--progress=plain`).
+CUDA wheel устанавливается отдельным слоем; `--only-binary` и CUDA-индекс
+исключают автоматический переход на сборку из исходников или CPU wheel.
 
 Внутри контейнера:
 
@@ -79,7 +75,8 @@ python scripts/smoke_llm.py
 
 Весь каталог проекта примонтирован в `/app`. Поэтому исходники, `models/`,
 `data/`, `artifacts/` и `.cache/` остаются на сервере после удаления контейнера.
-Python-окружение находится в `/opt/venv` внутри образа и не скрывается этим mount.
+Используется готовое Python-окружение `/opt/conda` из базового образа; mount его
+не скрывает. Дополнительное virtualenv внутри контейнера не создаётся.
 Не синхронизируй локальные virtualenv и содержимое `models/` поверх серверных
 каталогов с удалением файлов.
 
@@ -131,8 +128,9 @@ Linux x86_64 / Python 3.11. Он проверен резолвером; реал
 uv pip compile requirements.in --python-version 3.11 --python-platform x86_64-unknown-linux-gnu --index-url https://pypi.org/simple --no-header --no-annotate --output-file requirements.txt
 ```
 
-При изменении версии `llama-cpp-python` обнови её и в `requirements.in`, и в
-соответствующем слое Dockerfile, затем пересоздай `requirements.txt`.
+При изменении версии `llama-cpp-python` сначала проверь наличие готового CUDA 12.4
+wheel, обнови версию в `requirements.in` и Dockerfile, затем пересоздай
+`requirements.txt`. Версия PyTorch закреплена на версии базового образа.
 
 ## Параметры запуска
 
@@ -152,11 +150,10 @@ GPU_DEVICES=all ./launch_container
 Дополнительные настройки задаются перед командой:
 
 ```bash
-BUILD_JOBS=2 ./build_image
 API_PORT=8001 CPU_LIMIT=8 MEMORY_LIMIT=32g ./launch_container
 ```
 
-`BUILD_JOBS` ограничивает параллельность компиляции; `SHM_SIZE` по умолчанию `2g`.
+`SHM_SIZE` по умолчанию `2g`.
 Жёсткие лимиты CPU/RAM по умолчанию не заданы. API-порт 8000 контейнера проброшен
 на `127.0.0.1:8000` сервера. Для доступа с локальной машины можно использовать SSH
 port forwarding; будущий Uvicorn должен слушать `0.0.0.0:8000` внутри контейнера.
