@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+image_name="${IMAGE_NAME:-ai-paper-researcher:dev}"
+container_name="ai-paper-researcher"
+gpu_devices="${GPU_DEVICES:-0}"
+
+command -v docker >/dev/null || { echo "Docker is not installed." >&2; exit 1; }
+
+# Reuse the same development container. Never silently remove a container.
+if docker container inspect "${container_name}" >/dev/null 2>&1; then
+    mounted_project="$(docker container inspect \
+        --format '{{index .Config.Labels "ai-paper-researcher.project-dir"}}' \
+        "${container_name}")"
+    if [[ "${mounted_project}" != "${project_dir}" ]]; then
+        echo "Container ${container_name} belongs to a different project directory." >&2
+        exit 1
+    fi
+    if [[ "$(docker container inspect --format '{{.State.Running}}' "${container_name}")" != true ]]; then
+        docker start "${container_name}"
+    fi
+    printf 'Container is ready. Enter it with: docker exec -it %s bash\n' "${container_name}"
+    exit 0
+fi
+
+docker image inspect "${image_name}" >/dev/null
+mkdir -p -- "${project_dir}/models" "${project_dir}/data" \
+    "${project_dir}/artifacts" "${project_dir}/.cache"
+
+run_args=(
+    --detach
+    --init
+    --name "${container_name}"
+    --label "ai-paper-researcher.project-dir=${project_dir}"
+    --workdir /app
+    --mount "type=bind,src=${project_dir},dst=/app"
+    --shm-size "${SHM_SIZE:-2g}"
+    --publish "127.0.0.1:${API_PORT:-8000}:8000"
+)
+
+if [[ "${gpu_devices}" == all ]]; then
+    run_args+=(--gpus all)
+else
+    # Docker parses this argument as CSV; quotes also allow device lists, e.g. 0,1.
+    run_args+=(--gpus "\"device=${gpu_devices}\"")
+fi
+
+if [[ -f "${project_dir}/.env" ]]; then
+    run_args+=(--env-file "${project_dir}/.env")
+fi
+if [[ -n "${MEMORY_LIMIT:-}" ]]; then
+    run_args+=(--memory "${MEMORY_LIMIT}")
+fi
+if [[ -n "${CPU_LIMIT:-}" ]]; then
+    run_args+=(--cpus "${CPU_LIMIT}")
+fi
+if [[ -n "${DOCKER_NETWORK:-}" ]]; then
+    run_args+=(--network "${DOCKER_NETWORK}")
+fi
+
+docker run "${run_args[@]}" "${image_name}"
+printf 'Container is ready. Enter it with: docker exec -it %s bash\n' "${container_name}"

@@ -1,0 +1,6 @@
+# Only dependency manifests are needed to build the development image.
+# Application source is mounted at runtime. Weights and secrets stay off-image.
+**
+!Dockerfile
+!requirements.in
+!requirements.txt

@@ -1,0 +1,22 @@
+# Python virtual environments
+.vscode/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Model weights, downloaded papers, caches and generated artifacts
+/models/
+*.gguf
+/data/
+/artifacts/
+/.cache/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+credentials
